@@ -1,12 +1,34 @@
 import Head from 'next/head'
 import {useState, useEffect} from 'react';
 import io from 'socket.io-client';
-import dynamic from 'next/dynamic'
+// import dynamic from 'next/dynamic'
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+// const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 export default function Home() {
+
+  ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend
+  );
 
   const [game, setGame] = useState({});
   const [round, setRound] = useState(1);
@@ -18,102 +40,78 @@ export default function Home() {
 
   const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
 
-  let basicChartData = {
-    series: [
-      {
-        name: "Player 1",
-        data: []
-      },
-      {
-        name: "Player 2",
-        data: []
-      },
-      {
-        name: "Player 3",
-        data: []
-      },
-      {
-        name: "Player 4",
-        data: []
-      },
-      {
-        name: "Player 5",
-        data: []
-      }
-    ],
-    options: {
-      chart: {
-        height: 350,
-        type: 'line',
-        dropShadow: {
-          enabled: true,
-          color: '#000',
-          top: 18,
-          left: 7,
-          blur: 10,
-          opacity: 0.2
-        },
-        toolbar: {
-          show: false
-        }
-      },
-      dataLabels: {
-        enabled: true,
-      },
-      stroke: {
-        curve: 'smooth'
-      },
-      title: {
-        text: 'Player game credits',
-        align: 'left'
-      },
-      grid: {
-        borderColor: '#e7e7e7',
-        row: {
-          colors: ['#f3f3f3', 'transparent'],
-          opacity: 0.5
-        },
-      },
-      markers: {
-        size: 1
-      },
-      xaxis: {
-        categories: [],
-        title: {
-          text: 'Round'
-        }
-      },
-      yaxis: {
-        title: {
-          text: 'Points'
-        },
-        min: 10,
-        max: 250
-      },
-      legend: {
-        position: 'top',
-        horizontalAlign: 'right',
-        floating: true,
-        offsetY: -25,
-        offsetX: -5
-      }
+  const options = {
+    responsive: true,
+    interaction: {
+      mode: 'index',
+      intersect: false,
     },
+    stacked: false,
+    plugins: {
+      title: {
+        display: true,
+        text: 'User Credit Chart',
+      },
+    },
+    scales: {
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        grid: {
+          drawOnChartArea: false,
+        },
+      },
+    },
+  };
 
-
+  let basicChartData = {
+    options,
+    data: {
+      labels : [],
+      datasets: [
+        {
+          label: "Player 1",
+          data: []
+        },
+        {
+          label: "Player 2",
+          data: []
+        },
+        {
+          label: "Player 3",
+          data: []
+        },
+        {
+          label: "Player 4",
+          data: []
+        },
+        {
+          label: "Player 5",
+          data: []
+        }
+      ],
+    }
   };
   const [chartData, setChartData] = useState(basicChartData);
 
   const updateChartData = (data) => {
-    basicChartData.options.xaxis.categories = [];
+    basicChartData.data.labels = [];
     for (let i = 0; i < data.length; i++) {
       const round = data[i];
-      basicChartData.options.xaxis.categories.push('Round '+round.round);
-      basicChartData.series[0].data.push(round['Player 1'].credit);
-      basicChartData.series[1].data.push(round['Player 2'].credit);
-      basicChartData.series[2].data.push(round['Player 3'].credit);
-      basicChartData.series[3].data.push(round['Player 4'].credit);
-      basicChartData.series[4].data.push(round['Player 5'].credit);
+      basicChartData.data.labels.push('Round '+round.round);
+      basicChartData.data.datasets[0].data.push(round['Player 1'].credit);
+      basicChartData.data.datasets[1].data.push(round['Player 2'].credit);
+      basicChartData.data.datasets[2].data.push(round['Player 3'].credit);
+      basicChartData.data.datasets[3].data.push(round['Player 4'].credit);
+      basicChartData.data.datasets[4].data.push(round['Player 5'].credit);
     }
+    console.log(basicChartData);
     setChartData(basicChartData);
   };
 
@@ -231,12 +229,7 @@ export default function Home() {
 
               </tbody>
             </table>
-            <Chart
-              options={chartData.options}
-              series={chartData.series}
-              type="line"
-              width="900"
-            />
+            <Line options={chartData.options} data={chartData.data} />
           </>
         ) : (
           <>
