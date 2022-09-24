@@ -1,5 +1,10 @@
 import Head from 'next/head'
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
+import io from 'socket.io-client';
+import dynamic from 'next/dynamic'
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 export default function Home() {
 
@@ -7,17 +12,138 @@ export default function Home() {
   const [round, setRound] = useState(1);
   const [guessNumber, setGuessNumber] = useState('');
   const [numberError, setNumberError] = useState('');
+  const [userCredits, setUserCredits] = useState([]);
+  const [secretNumbers, setSecretNumbers] = useState([]);
+  const [roundDetails, setRoundDetails] = useState([]);
+
+  const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
+
+  let basicChartData = {
+    series: [
+      {
+        name: "Player 1",
+        data: []
+      },
+      {
+        name: "Player 2",
+        data: []
+      },
+      {
+        name: "Player 3",
+        data: []
+      },
+      {
+        name: "Player 4",
+        data: []
+      },
+      {
+        name: "Player 5",
+        data: []
+      }
+    ],
+    options: {
+      chart: {
+        height: 350,
+        type: 'line',
+        dropShadow: {
+          enabled: true,
+          color: '#000',
+          top: 18,
+          left: 7,
+          blur: 10,
+          opacity: 0.2
+        },
+        toolbar: {
+          show: false
+        }
+      },
+      dataLabels: {
+        enabled: true,
+      },
+      stroke: {
+        curve: 'smooth'
+      },
+      title: {
+        text: 'Player game credits',
+        align: 'left'
+      },
+      grid: {
+        borderColor: '#e7e7e7',
+        row: {
+          colors: ['#f3f3f3', 'transparent'],
+          opacity: 0.5
+        },
+      },
+      markers: {
+        size: 1
+      },
+      xaxis: {
+        categories: [],
+        title: {
+          text: 'Round'
+        }
+      },
+      yaxis: {
+        title: {
+          text: 'Points'
+        },
+        min: 10,
+        max: 250
+      },
+      legend: {
+        position: 'top',
+        horizontalAlign: 'right',
+        floating: true,
+        offsetY: -25,
+        offsetX: -5
+      }
+    },
+
+
+  };
+  const [chartData, setChartData] = useState(basicChartData);
+
+  const updateChartData = (data) => {
+    basicChartData.options.xaxis.categories = [];
+    for (let i = 0; i < data.length; i++) {
+      const round = data[i];
+      basicChartData.options.xaxis.categories.push('Round '+round.round);
+      basicChartData.series[0].data.push(round['Player 1'].credit);
+      basicChartData.series[1].data.push(round['Player 2'].credit);
+      basicChartData.series[2].data.push(round['Player 3'].credit);
+      basicChartData.series[3].data.push(round['Player 4'].credit);
+      basicChartData.series[4].data.push(round['Player 5'].credit);
+    }
+    setChartData(basicChartData);
+  };
+
+
+  useEffect(() => {
+    socket.on('connect', (data) => {
+      console.log('Socket connected');
+    });
+
+    socket.on('creditUpdated', function (data) {
+      if(data.emitData && data.gameDetails) {
+        setGame(data.gameDetails);
+        setRoundDetails(data.emitData);
+        updateChartData(data.emitData);
+      }
+    });
+  }, []);
 
   const changeHandler = (e) => {
     let enteredNumber = e.target.value;
     if(Number(enteredNumber) > 0 && Number(enteredNumber) < 10) {
       setGuessNumber(Number(enteredNumber));
+      setNumberError('');
     } else {
       setNumberError('Number must be between 0 to 9.99');
     }
   }
 
   const submitGuessNumber = ()=> {
+    if(numberError!="") return;
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/${game.gameId}/submit-guess/${game.roundId}`, {
       method: 'POST',
       headers: {
@@ -30,7 +156,7 @@ export default function Home() {
     .then(function(response){
       return response.json()})
     .then(function(data) {
-      console.log(data);
+      socket.emit('creditUpdate', {roundId: game.roundId, gameId: game.gameId, round: round});
     }).catch(error => console.error('Error:', error));
   }
 
@@ -44,10 +170,13 @@ export default function Home() {
     .then(function(response){
       return response.json()})
     .then(function(data) {
-      console.log(data);
       setGame(data.gameDetails);
     }).catch(error => console.error('Error:', error));
   };
+
+  const startNewGame = () => {
+    window.location.reload();
+  }
 
   return (
     <div className="container">
@@ -63,28 +192,63 @@ export default function Home() {
 
         {game?.gameId ? (
           <>
-            <h3>Round {round}</h3>
+            <h3>Round {roundDetails.length + 1}</h3>
             <p className="description">
               Enter your guess number
             </p>
             <div>
-              <input type="number" className="form-control" onChange={changeHandler} /> <br />
-              <button className="btn btn-primary" onClick={submitGuessNumber}>Submit</button>
+              <input type="number" className="form-control mb-2" onChange={changeHandler} />
+              <p className={numberError!=''?'text-danger':'d-none'}>{numberError}</p>
+              <button className="btn btn-primary mr-2" onClick={submitGuessNumber}>Submit</button>
+              <button className="btn btn-warning ml-2" onClick={startNewGame}>Start New</button>
             </div>
+
+
+            <table className="table table-hover my-4">
+              <thead>
+                <tr>
+                  <th>Round</th>
+                  <th>Secret Number</th>
+                  <th>Player 1</th>
+                  <th>Player 2</th>
+                  <th>Player 3</th>
+                  <th>Player 4</th>
+                  <th>Player 5</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roundDetails.map((round, i) => (
+                  <tr key={i}>
+                    <td>{round.round}</td>
+                    <td>{round.secret}</td>
+                    <td>Guess: {round['Player 1']?.guessNumber}<br />Credit: {round['Player 1']?.credit}</td>
+                    <td>Guess: {round['Player 2']?.guessNumber}<br />Credit: {round['Player 2']?.credit}</td>
+                    <td>Guess: {round['Player 3']?.guessNumber}<br />Credit: {round['Player 3']?.credit}</td>
+                    <td>Guess: {round['Player 4']?.guessNumber}<br />Credit: {round['Player 4']?.credit}</td>
+                    <td>Guess: {round['Player 5']?.guessNumber}<br />Credit: {round['Player 5']?.credit}</td>
+                  </tr>
+                ))}
+
+              </tbody>
+            </table>
+            <Chart
+              options={chartData.options}
+              series={chartData.series}
+              type="line"
+              width="900"
+            />
           </>
         ) : (
           <>
             <p className="description">
               Click Start Game Button to start game
-            </p>
+            </p><br />
             <div>
               <button className="btn btn-primary" onClick={startGame}>Start Game</button>
             </div>
           </>
         )}
-
       </main>
-
 
 
       <style jsx>{`
