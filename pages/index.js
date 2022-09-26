@@ -1,7 +1,6 @@
 import Head from 'next/head'
 import {useState, useEffect} from 'react';
 import io from 'socket.io-client';
-// import dynamic from 'next/dynamic'
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 import {
@@ -16,7 +15,6 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
-// const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 export default function Home() {
 
@@ -37,6 +35,7 @@ export default function Home() {
   const [userCredits, setUserCredits] = useState([]);
   const [secretNumbers, setSecretNumbers] = useState([]);
   const [roundDetails, setRoundDetails] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
 
@@ -58,15 +57,7 @@ export default function Home() {
         type: 'linear',
         display: true,
         position: 'left',
-      },
-      y1: {
-        type: 'linear',
-        display: true,
-        position: 'right',
-        grid: {
-          drawOnChartArea: false,
-        },
-      },
+      }
     },
   };
 
@@ -101,7 +92,12 @@ export default function Home() {
   const [chartData, setChartData] = useState(basicChartData);
 
   const updateChartData = (data) => {
-    basicChartData.data.labels = [];
+    basicChartData.data.labels = ['Start'];
+    basicChartData.data.datasets[0].data = [0];
+    basicChartData.data.datasets[1].data = [0];
+    basicChartData.data.datasets[2].data = [0];
+    basicChartData.data.datasets[3].data = [0];
+    basicChartData.data.datasets[4].data = [0];
     for (let i = 0; i < data.length; i++) {
       const round = data[i];
       basicChartData.data.labels.push('Round '+round.round);
@@ -122,6 +118,8 @@ export default function Home() {
     });
 
     socket.on('creditUpdated', function (data) {
+      console.log('Credit Updated');
+      setLoading(false);
       if(data.emitData && data.gameDetails) {
         setGame(data.gameDetails);
         setRoundDetails(data.emitData);
@@ -142,6 +140,7 @@ export default function Home() {
 
   const submitGuessNumber = ()=> {
     if(numberError!="") return;
+    setLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/${game.gameId}/submit-guess/${game.roundId}`, {
       method: 'POST',
       headers: {
@@ -195,9 +194,9 @@ export default function Home() {
               Enter your guess number
             </p>
             <div>
-              <input type="number" className="form-control mb-2" onChange={changeHandler} />
+              <input type="number" id="guessNumberInput" className="form-control mb-2" onChange={changeHandler} />
               <p className={numberError!=''?'text-danger':'d-none'}>{numberError}</p>
-              <button className="btn btn-primary mr-2" onClick={submitGuessNumber}>Submit</button>
+              <button className="btn btn-primary mr-2" onClick={submitGuessNumber}>{loading?'Submitting':'Submit'}</button>
               <button className="btn btn-warning ml-2" onClick={startNewGame}>Start New</button>
             </div>
 
@@ -229,7 +228,7 @@ export default function Home() {
 
               </tbody>
             </table>
-            <Line options={chartData.options} data={chartData.data} />
+            <Line options={chartData.options} data={chartData.data} redraw />
           </>
         ) : (
           <>
